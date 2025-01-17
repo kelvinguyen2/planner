@@ -7,13 +7,15 @@
 
 
 import SwiftUI
+import FirebaseAuth
 
 struct LoginView: View {
     @State private var email = ""
     @State private var password = ""
     @State private var isPasswordVisible = false
     @State private var isAuthenticated = false
-    @State private var userName: String = "" // Store the logged-in user's name
+    @State private var errorMessage: String?
+    @State private var userName: String = "" // User's name from Firebase
     
     var body: some View {
         NavigationStack {
@@ -30,9 +32,19 @@ struct LoginView: View {
                         .bold()
                         .foregroundColor(.white)
                     
+                    // Email and Password Inputs
                     CustomTextField(placeholder:"Email", text: $email, icon: "envelope.fill")
-                    CustomSecureField(placeholder:"Password", text: $password, isVisible: $isPasswordVisible)
+                    CustomSecureField(placeholder: "Password", text: $password, isVisible: $isPasswordVisible)
                     
+                    // Error Message
+                    if let errorMessage = errorMessage {
+                        Text(errorMessage)
+                            .foregroundColor(.red)
+                            .font(.caption)
+                            .padding(.top, -10)
+                    }
+                    
+                    // Login Button
                     Button(action: {
                         authenticateUser()
                     }) {
@@ -45,7 +57,7 @@ struct LoginView: View {
                     }
                     .padding(.horizontal, 40)
                     
-                    // Navigate to HomePageView when authenticated
+                    // Navigation to HomePageView if authenticated
                     NavigationLink(destination: HomePageView(userName: userName), isActive: $isAuthenticated) {
                         EmptyView()
                     }
@@ -57,13 +69,19 @@ struct LoginView: View {
     }
     
     func authenticateUser() {
-        // Simulate authentication logic
-        if email == "user@example.com" && password == "password123" {
-            userName = "John Doe" // Replace with dynamic data from your backend
-            isAuthenticated = true
-        } else {
-            // Handle invalid login
-            print("Invalid credentials")
+        Auth.auth().signIn(withEmail: email, password: password) { result, error in
+            if let error = error {
+                self.errorMessage = error.localizedDescription
+                return
+            }
+            
+            // Get user data
+            if let user = result?.user {
+                self.userName = user.displayName ?? "User"
+                self.isAuthenticated = true
+            } else {
+                self.errorMessage = "Unable to retrieve user data."
+            }
         }
     }
 }
