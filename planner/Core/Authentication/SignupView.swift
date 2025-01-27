@@ -1,20 +1,20 @@
-//
 //  SignupView.swift
 //  planner
 //
 //  Created by Kelvin Nguyen on 1/17/25.
-//
-
 
 import SwiftUI
+import FirebaseAuth
 
 struct SignupView: View {
     @State private var fullName = "" // Full Name field
     @State private var email = "" // Email field
+    @State private var password = "" // Password field
     @State private var isPrivacyChecked = false // Checkbox for Terms and Privacy Policy
     @State private var hasReviewedTerms = false // Trigger for reviewed Terms
-    @State private var navigateToCreatePassword = false // Navigation to Create Password
+    @State private var navigateToVerification = false // Navigation to verification
     @State private var errorMessage: String? // Error message for validation
+    @State private var isLoading = false // Loading state
 
     var body: some View {
         ZStack {
@@ -67,6 +67,20 @@ struct SignupView: View {
                         .background(Color.white.opacity(0.2))
                         .cornerRadius(10)
                         .foregroundColor(.white)
+                }
+                .padding(.horizontal, 40)
+
+                // Password Input Field
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Password")
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.8))
+
+                    SecureField("Enter your password", text: $password)
+                        .padding()
+                        .background(Color.white.opacity(0.2))
+                        .cornerRadius(10)
+                        .foregroundColor(.white)
 
                     if let errorMessage = errorMessage {
                         Text(errorMessage)
@@ -96,31 +110,26 @@ struct SignupView: View {
                 }
                 .padding(.horizontal, 40)
 
-                // Continue Button
-                Button(action: {
-                    if validateInputs() {
-                        navigateToCreatePassword = true
+                // Sign-Up Button
+                Button(action: signUp) {
+                    if isLoading {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .padding()
+                    } else {
+                        Text("Sign Up")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(isPrivacyChecked && hasReviewedTerms && validateInputs()
+                                            ? Color.blue
+                                            : Color.gray)
+                            .foregroundColor(.white)
+                            .cornerRadius(25)
+                            .shadow(radius: 5)
                     }
-                }) {
-                    Text("Continue")
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(isPrivacyChecked && hasReviewedTerms && validateInputs()
-                                        ? Color.blue
-                                        : Color.gray)
-                        .foregroundColor(.white)
-                        .cornerRadius(25)
-                        .shadow(radius: 5)
                 }
                 .padding(.horizontal, 40)
-                .disabled(!isPrivacyChecked || !hasReviewedTerms || !validateInputs())
-
-                // Navigation to Create Password
-                NavigationLink(
-                    destination: CreatePasswordView(email: email),
-                    isActive: $navigateToCreatePassword,
-                    label: { EmptyView() }
-                )
+                .disabled(!isPrivacyChecked || !hasReviewedTerms || !validateInputs() || isLoading)
 
                 Spacer()
             }
@@ -129,20 +138,46 @@ struct SignupView: View {
 
     // Validation Function
     func validateInputs() -> Bool {
-        // Check if full name is not empty
         if fullName.trimmingCharacters(in: .whitespaces).isEmpty {
             errorMessage = "Please enter your full name."
             return false
         }
-        // Validate email
         let emailRegex = "[A-Z0-9a-z._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,64}"
         let emailPredicate = NSPredicate(format: "SELF MATCHES %@", emailRegex)
         if !emailPredicate.evaluate(with: email) {
             errorMessage = "Please enter a valid email address."
             return false
         }
-        // Clear error if inputs are valid
+        if password.count < 6 {
+            errorMessage = "Password must be at least 6 characters long."
+            return false
+        }
         errorMessage = nil
         return true
     }
+
+    // Firebase Sign-Up Function with Email Verification
+    func signUp() {
+        guard validateInputs() else { return }
+        isLoading = true
+        Auth.auth().createUser(withEmail: email, password: password) { result, error in
+            isLoading = false
+            if let error = error {
+                errorMessage = error.localizedDescription
+                return
+            }
+
+            // Send Email Verification
+            result?.user.sendEmailVerification { error in
+                if let error = error {
+                    errorMessage = error.localizedDescription
+                    return
+                }
+
+                // Notify user to verify email before proceeding
+                errorMessage = "A verification email has been sent to \(email). Please verify your email before logging in."
+            }
+        }
+    }
 }
+
